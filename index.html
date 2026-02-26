@@ -25,7 +25,6 @@
       :root {
         --bg: #f5f3ee;
         --surface: #ffffff;
-        --border: rgba(30, 20, 10, 0.07);
         --border-md: rgba(30, 20, 10, 0.12);
         --text: #1a1410;
         --text-soft: #6b6560;
@@ -47,7 +46,6 @@
         overflow: hidden;
       }
 
-      /* Grid/Grain background effect */
       body::after {
         content: "";
         position: fixed;
@@ -123,6 +121,7 @@
         max-width: 400px;
         box-shadow: 0 12px 40px rgba(30, 20, 10, 0.08);
         text-align: center;
+        transition: transform 0.3s ease;
       }
 
       .welcome-eyebrow {
@@ -157,12 +156,6 @@
         margin-bottom: 2rem;
       }
 
-      /* ── INPUTS & BUTTONS ───────────────── */
-      .input-group {
-        margin-bottom: 1.5rem;
-        text-align: left;
-      }
-
       input {
         width: 100%;
         background: var(--surface);
@@ -174,6 +167,7 @@
         color: var(--text);
         transition: all 0.2s;
         outline: none;
+        margin-bottom: 1.5rem;
       }
       input:focus {
         border-color: var(--red-border);
@@ -184,7 +178,7 @@
         text-align: center;
         letter-spacing: 0.5em;
         font-weight: 600;
-        font-size: 1.2rem;
+        font-size: 1.4rem;
       }
 
       button {
@@ -204,35 +198,26 @@
       button:hover {
         background: #b91c1c;
         transform: translateY(-1px);
-        box-shadow: 0 6px 16px rgba(220, 38, 38, 0.2);
-      }
-      button:disabled {
-        background: var(--text-mute);
-        box-shadow: none;
-        cursor: not-allowed;
       }
 
       .hidden {
         display: none;
       }
 
-      .link-secondary {
-        margin-top: 1.5rem;
-        font-size: 0.8rem;
-        color: var(--text-mute);
-        cursor: pointer;
-        text-decoration: none;
-        display: inline-block;
-        transition: color 0.2s;
-      }
-      .link-secondary:hover {
-        color: var(--red);
+      .status-msg {
+        margin-top: 1.2rem;
+        font-size: 0.75rem;
+        font-family: "DM Mono", monospace;
+        letter-spacing: 1px;
+        height: 1rem;
       }
 
-      .status-msg {
-        margin-top: 1rem;
-        font-size: 0.85rem;
-        font-family: "DM Mono", monospace;
+      .kb-hint {
+        margin-top: 2rem;
+        font-size: 0.65rem;
+        color: var(--text-mute);
+        text-transform: uppercase;
+        letter-spacing: 1px;
       }
     </style>
   </head>
@@ -258,7 +243,7 @@
     </header>
 
     <div class="wrapper">
-      <div class="card">
+      <div class="card" id="mainCard">
         <div class="welcome-eyebrow">
           <span class="eyebrow-line"></span>
           Security Protocol
@@ -266,20 +251,13 @@
 
         <div id="step1">
           <h2>Identity <em>Verification</em></h2>
-          <p>
-            Please enter your email address. We'll send a 6-digit access code to
-            verify your session.
-          </p>
-
-          <div class="input-group">
-            <input
-              type="email"
-              id="userEmail"
-              placeholder="name@email.com"
-              required
-            />
-          </div>
-
+          <p>Enter your email. Press <strong>Enter</strong> to request code.</p>
+          <input
+            type="email"
+            id="userEmail"
+            placeholder="name@email.com"
+            autofocus
+          />
           <button id="sendBtn" onclick="sendEmailOTP()">
             Request Access Code
           </button>
@@ -288,81 +266,90 @@
         <div id="step2" class="hidden">
           <h2>Enter <em>Code</em></h2>
           <p>
-            Verification code sent to:<br /><strong
-              id="displayEmail"
-              style="color: var(--text)"
-            ></strong>
+            Code sent to <strong id="displayEmail"></strong>. Type to verify.
           </p>
-
-          <div class="input-group">
-            <input
-              type="text"
-              id="otpInput"
-              class="otp-input"
-              placeholder="000000"
-              maxlength="6"
-            />
-          </div>
-
+          <input
+            type="text"
+            id="otpInput"
+            class="otp-input"
+            placeholder="000000"
+            maxlength="6"
+          />
           <button id="verifyBtn" onclick="verifyOTP()">Verify Identity</button>
-
-          <div class="link-secondary" onclick="location.reload()">
-            ← Use a different email
-          </div>
         </div>
 
         <div id="statusMessage" class="status-msg"></div>
+        <div class="kb-hint">Press Enter to continue</div>
       </div>
     </div>
 
     <script>
-      // EmailJS Credentials
+      // EmailJS Setup
       const PUBLIC_KEY = "GK1KSo3rSzH0WXvFA";
       const SERVICE_ID = "service_07gd83a";
       const TEMPLATE_ID = "template_titotg9";
 
-      (function () {
-        emailjs.init(PUBLIC_KEY);
-      })();
-
+      emailjs.init(PUBLIC_KEY);
       let generatedOTP = "";
+      let currentStep = 1;
 
+      // ── KEYBOARD LOGIC ───────────────────
+      document.addEventListener("keydown", function (event) {
+        const emailInput = document.getElementById("userEmail");
+        const otpInput = document.getElementById("otpInput");
+
+        // 1. Auto-focus logic: Start typing anywhere to focus the active input
+        if (currentStep === 1 && document.activeElement !== emailInput) {
+          if (event.key.length === 1 || event.key === "BackColor")
+            emailInput.focus();
+        } else if (currentStep === 2 && document.activeElement !== otpInput) {
+          if (event.key.length === 1 || event.key === "BackColor")
+            otpInput.focus();
+        }
+
+        // 2. ENTER key trigger
+        if (event.key === "Enter") {
+          event.preventDefault(); // Stop default form submission
+          if (currentStep === 1) {
+            sendEmailOTP();
+          } else {
+            verifyOTP();
+          }
+        }
+      });
+
+      // ── FUNCTIONALITY ────────────────────
       function sendEmailOTP() {
         const email = document.getElementById("userEmail").value;
         const btn = document.getElementById("sendBtn");
         const status = document.getElementById("statusMessage");
 
         if (!email || !email.includes("@")) {
-          alert("Please enter a valid email address.");
+          status.innerText = "INVALID EMAIL FORMAT";
+          status.style.color = "var(--red)";
           return;
         }
 
         generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
-
         btn.disabled = true;
-        btn.innerText = "Processing...";
-        status.innerText = "CONTACTING SERVER...";
-        status.style.color = "var(--text-mute)";
-
-        const templateParams = {
-          to_email: email,
-          otp: generatedOTP,
-        };
+        btn.innerText = "SENDING...";
+        status.innerText = "INITIALIZING SECURE LINK...";
 
         emailjs
-          .send(SERVICE_ID, TEMPLATE_ID, templateParams)
+          .send(SERVICE_ID, TEMPLATE_ID, { to_email: email, otp: generatedOTP })
           .then(() => {
+            currentStep = 2;
             document.getElementById("displayEmail").innerText = email;
             document.getElementById("step1").classList.add("hidden");
             document.getElementById("step2").classList.remove("hidden");
-            status.innerText = "";
+            document.getElementById("otpInput").focus();
+            status.innerText = "CODE DISPATCHED";
+            status.style.color = "var(--green)";
           })
-          .catch((error) => {
-            alert("Verification service unavailable.");
-            console.error("Error:", error);
+          .catch(() => {
             btn.disabled = false;
             btn.innerText = "Request Access Code";
-            status.innerText = "CONNECTION FAILED";
+            status.innerText = "CONNECTION ERROR";
           });
       }
 
@@ -371,22 +358,21 @@
         const verifyBtn = document.getElementById("verifyBtn");
         const status = document.getElementById("statusMessage");
 
-        if (userInput === generatedOTP) {
+        if (userInput === generatedOTP && generatedOTP !== "") {
           verifyBtn.disabled = true;
-          verifyBtn.innerText = "Identity Confirmed";
+          verifyBtn.innerText = "CONFIRMED";
           verifyBtn.style.background = "var(--green)";
-          verifyBtn.style.boxShadow = "none";
           status.innerText = "ACCESS GRANTED";
           status.style.color = "var(--green)";
 
           setTimeout(() => {
-            window.location.href =
-              "https://antony-rojes.github.io/medical-data-website/";
-          }, 1500);
+            window.location.href = "https://github.com";
+          }, 1000);
         } else {
-          status.innerText = "INVALID CODE";
+          status.innerText = "INVALID ACCESS CODE";
           status.style.color = "var(--red)";
           document.getElementById("otpInput").value = "";
+          document.getElementById("otpInput").focus();
         }
       }
     </script>
